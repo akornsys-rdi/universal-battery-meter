@@ -1,6 +1,6 @@
 /*
- *
- * LED BAR
+ * RELAY      D13
+ * BUZZER     D12
  *  _
  * |_| RED    D11
  * |_| GREEN  D10
@@ -13,62 +13,69 @@
  * |_| RED    D3
  * |_| RED    D2
  *
- * BUZZER     D12
- * RELAY      D13
- * 
  * RESISTOR DIVIDER NETWORK (82k primary resistor)
  *
- * -/\/\- 82k A0
- * -/\/\- 27k A1
- * -/\/\- 12k A2
- * -/\/\- 5k6 A3
- * -/\/\- 2k7 A4
- * -/\/\- k82 A5
+ * ANALOG IN  A6	1/1
  *
- * ANALOG IN  A6 
+ * -/\/\- k82 A5	1/100
+ * -/\/\- 2k7 A4	1/32
+ * -/\/\- 5k6 A3	1/16
+ * -/\/\- 12k A2	1/8
+ * -/\/\- 27k A1	1/4
+ * -/\/\- 82k A0	1/2
  *
  */
- 
- /*
-  * TODO
-  *
-  * - EEPROM:
-  *   + curve (cd, ni, pb, li)
-  *   + nominal voltage
-  *   + selectionable divider
-  * - auto mode
-  * - algorithm
-  * - menu
-  * - al inicio monitorizar 1/100
-  * - correction factor adc / mux
-  */
-  
+
+/*
+ *
+ * DIV	MIN	MINCUT	NOM	MAXCUT	MAX	RES/STEP
+ * 1	4.9	-/750	2500	4250	5000	4.8875855327
+ * 2	9.8	1500	5000	8500	10000	9.7751710654
+ * 4	19.6	3000	10000	17000	20000	19.5503421309
+ * 8	39.1	6000	20000	34000	40000	39.1006842619
+ * 16	78.2	12000	40000	68000	80000	78.2013685239
+ * 32	156.4	24000	80000	136000	160000	156.4027370478
+ * 100	488.8	-	250000	-	500000	488.7585532746
+ *
+ */
+
 #include <MsTimer2.h>
+
 //constant
-#define BATT_NICD 0
-#define BATT_NIMH 1
-#define BATT_PB 2
-#define BATT_LIION 3
-#define BATT_LIPO 4
-#define BATT_LIFE 5
+#define BATT_NONE 0
+//nickel
+#define BATT_NICD 11 //nickel-cadmium
+#define BATT_NIMH 12 //nickel metal hydride
+#define BATT_NIZN 13 //nickel-zinc
+//lead
+#define BATT_PB 2 
+//lithium
+#define BATT_LIION 31 //lithium-ion
+#define BATT_LIPO 32 //lithium polymer
+#define BATT_LIFE 33 //lithium iron phosphate
 
-//user param
-#define BATT_TYPE BATT_PB
-#define BATT_CELLS 12
-#define LPF_SIZE 32    //min 4 max 240
+#define	DIV_100	100
+#define DIV_32	32
+#define DIV_16	16
+#define DIV_8	8
+#define DIV_4	4
+#define DIV_2	2
+#define DIV_1	1
 
-boolean bDisplay[11] = {false, false, false, false, false, false, false, false, false, false, false};
-boolean bDspAni[11] = {false, false, false, false, false, false, false, false, false, false, false};
+//display & buzzer
+boolean Display[12] = {false, false, false, false, false, false, false, false, false, false, false};
+boolean DspAni[12] = {false, false, false, false, false, false, false, false, false, false, false};
 
-void isrtmr2display() {
-  //every 10ms
-  static byte itd_yBlinkFlag = 0;
-  byte itd_yLoop = 0;
+//isr timer2 every 10ms
+void isrtmr2() {
+  static byte isr_BlinkFlag = 0; //uses bit 5 for blink (~640ms )
+  byte isr_yLoop = 0;
   
-  itd_yBlinkFlag++;
-  for (itd_yLoop = 0; itd_yLoop < 11; itd_yLoop++) {
-    digitalWrite(itd_yLoop + 2, (bDisplay[itd_yLoop] && (!bDspAni[itd_yLoop] || (itd_yBlinkFlag & 0x20))));
+  isr_BlinkFlag++; //increment 
+  for (isr_yLoop = 0; isr_yLoop < 12; isr_yLoop++) {
+    digitalWrite(isr_yLoop + 2, (Display[isr_yLoop] && (!DspAni[isr_yLoop] || (isr_BlinkFlag & 0x20))));
   }
+  autovolts();
 }
 
 void setup() {
@@ -79,173 +86,38 @@ void setup() {
     pinMode(yLoop, OUTPUT);
     digitalWrite(yLoop, LOW);
   }
-  MsTimer2::set(10, isrtmr2display);
+  MsTimer2::set(10, isrtmr2);
   MsTimer2::start();
   analogReference(DEFAULT);
 }
 
 void loop() {
-  Check();
-  //PrintMenu();
-  //DebugMenu();
-  do {
-    BattMeasure();
-    delay(100);
-  } while(1);
+
 }
 
-void Check() {
-  byte C_yLoop = 0;
+//return readed volt value in mV with autoscale
+unsigned long autovolts() {
+  static byte mode = 0; //0 off; 1 autoscale; 2 protection
+  static unsigned long prevvalue = 0;
   
-  for (C_yLoop = 0; C_yLoop < 11; C_yLoop++) {
-    bDisplay[C_yLoop] = true;
-  }
-  delay(500);
-  for (C_yLoop = 0; C_yLoop < 11; C_yLoop++) {
-    bDisplay[C_yLoop] = false;
-  }
-  digitalWrite(13, LOW);
-  delay(50);
-  digitalWrite(A2, HIGH);
-  delay(10);
-  digitalWrite(13, HIGH);
-}
-
-void BattMeasure() {
-  byte BM_yLoop = 0;
-  const float fCurve[6][11] = {
-    {1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2}, //nicd
-    {1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2}, //nimh
-    {1.75, 1.89, 1.93, 1.96, 1.98, 2.01, 2.03, 2.05, 2.07, 2.08, 2.12}, //pb
-    {3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6}, //liion
-    {3.7, 3.7, 3.7, 3.7, 3.7, 3.7, 3.7, 3.7, 3.7, 3.7, 3.7}, //lipo
-    {3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6, 3.6} //life
-  };
-  float BM_fCellVoltage = 0;
-  
-  BM_fCellVoltage = fmap(AnalogLPF(analogRead(A6)), 0.0, 1023.0, 0.0, 40.0) / BATT_CELLS;
-  if (BM_fCellVoltage > fCurve[BATT_TYPE][10]) {
-    bDisplay[9] = true;
-    bDspAni[9] = true;
-    for (BM_yLoop = 0; BM_yLoop < 9; BM_yLoop++) {
-      bDisplay[BM_yLoop] = false;
-      bDspAni[BM_yLoop] = false;
-    }
-  }
-  else if (BM_fCellVoltage < fCurve[BATT_TYPE][0]) {
-    bDisplay[0] = true;
-    bDspAni[0] = true;
-    for (BM_yLoop = 1; BM_yLoop < 10; BM_yLoop++) {
-      bDisplay[BM_yLoop] = false;
-      bDspAni[BM_yLoop] = false;
-    }
+  if (mode) {
+    
   }
   else {
-    for (BM_yLoop = 0; BM_yLoop < 9; BM_yLoop++) {
-      if (BM_fCellVoltage > fCurve[BATT_TYPE][BM_yLoop + 1]) bDisplay[BM_yLoop] = true;
-      else bDisplay[BM_yLoop] = false;
-    }
+    setdivider(100);
+    mode = 2;
   }
+}
+
+void setdivider(int div) {
+  //activar 100, desconectar rango actual, activar rango correspondiente, desactivar 100
 }
 
 /*
-void PrintMenu() {
-  unsigned long PM_lTimeOut = 0;
-  byte PM_yLoop = 0;
-  
-  PM_lTimeOut = millis();
-  for (PM_yLoop = 0; PM_yLoop < 10; PM_yLoop++) {
-    bDisplay[PM_yLoop] = true;
-    bDspAni[PM_yLoop] = true;
-  }
-  Serial.println("Welcome to **Universal Battery Meter** version 0.1");
-  Serial.println("Select an option, the default one is selected within 10 seconds:");
-  Serial.println("[1] Show current input");
-  Serial.println("[2] Show configuration");
-  Serial.println("[3] Edit configuration");
-  Serial.println("[4] Exit (default)");
-  Serial.println("Write option number [1-4]:");
-  while (millis() < (PM_lTimeOut + 10000));
-  for (PM_yLoop = 0; PM_yLoop < 10; PM_yLoop++) {
-    bDisplay[PM_yLoop] = false;
-    bDspAni[PM_yLoop] = false;
-  }
-}
-*/
-
-unsigned int AnalogLPF(unsigned int ALPF_iValue) {
-  static unsigned int ALPF_iBuffer[LPF_SIZE];
-  unsigned long ALPF_lAve;
-  byte ALPF_yLoop = 0;
-  
-  for (ALPF_yLoop = (LPF_SIZE - 2); ALPF_yLoop < LPF_SIZE; ALPF_yLoop--) {
-    ALPF_iBuffer[ALPF_yLoop + 1] = ALPF_iBuffer[ALPF_yLoop];
-  }
-  ALPF_iBuffer[0] = ALPF_iValue;
-  ALPF_lAve = 0;
-  for (ALPF_yLoop = 0; ALPF_yLoop < LPF_SIZE; ALPF_yLoop++) {
-    ALPF_lAve += ALPF_iBuffer[ALPF_yLoop];
-  }
-  ALPF_lAve /= LPF_SIZE;
-  return ALPF_lAve;
-}
-
-float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-/*
-void DebugMenu() {
-  byte yChar = 0;
-  
-  do {
-    if (Serial.available() > 0) {
-      yChar = Serial.read();
-      switch (yChar) {
-        case 'r':
-          digitalWrite(13, LOW);
-          break;
-        case 'R':
-          digitalWrite(13, HIGH);
-          break;
-        case 'a':
-          digitalWrite(A0, LOW);
-          break;
-        case 'A':
-          digitalWrite(A0, HIGH);
-          break;
-        case 's':
-          digitalWrite(A1, LOW);
-          break;
-        case 'S':
-          digitalWrite(A1, HIGH);
-          break;
-        case 'd':
-          digitalWrite(A2, LOW);
-          break;
-        case 'D':
-          digitalWrite(A2, HIGH);
-          break;
-        case 'f':
-          digitalWrite(A3, LOW);
-          break;
-        case 'F':
-          digitalWrite(A3, HIGH);
-          break;
-        case 'g':
-          digitalWrite(A4, LOW);
-          break;
-        case 'G':
-          digitalWrite(A4, HIGH);
-          break;
-        case 'h':
-          digitalWrite(A5, LOW);
-          break;
-        case 'H':
-          digitalWrite(A5, HIGH);
-          break;
-      }
-    }
-  } while(1);
-}
+si no esta activo, activar y meter en proteccion
+si esta en proteccion esperar tiempo antes de volver a autoscale
+en autoscale, si el slewrate es muy alto, pasar a proteccion
+en caso contrario ir desde la mayor division al la menor, buscando el valor centrado
+si el valor supera el 85% subir de escala
+si el valor baja del 15% bajar de escala
 */
