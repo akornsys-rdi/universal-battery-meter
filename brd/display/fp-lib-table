@@ -1,0 +1,5 @@
+(fp_lib_table
+  (lib (name AST1575BMATRQ)(type KiCad)(uri /home/kwendenarmo/git-repos/akornsys-rdi/kicad-library/modules.pretty)(options "")(descr ""))
+  (lib (name 41SRWA)(type KiCad)(uri /home/kwendenarmo/git-repos/akornsys-rdi/kicad-library/41srwa.pretty)(options "")(descr ""))
+  (lib (name SKQG180836)(type KiCad)(uri /home/kwendenarmo/git-repos/akornsys-rdi/kicad-library/skqg180836.pretty)(options "")(descr ""))
+)
