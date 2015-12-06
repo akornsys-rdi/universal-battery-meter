@@ -23,8 +23,11 @@ Reimplementación del branch `old-v1`, con funcionalidades añadidas:
 - Hardware dividido en tres bloques:
     * Display
         + Muestra datos a través de cuatro display 7seg.
-        + Cuatro LED de modo (*V*, *A*, *Ah*, *ºC*) para indicar qué tipo de dato se está mostrando en display.
-        + Diez led para escala analógica (RGGGGYYYRR).
+        + Cuatro LED de modo (*V*, *A*, *W, *ºC*) para indicar qué tipo de dato se está mostrando en display. (`DK6`: `DC`-`DF`)
+        + Dos LED de tipo de visualización (instantáneo o a la hora). (`DK6`: `DG`-`DDP`)
+        + Cuatro LED de sonda activa. (`DK7`: `DA`-`DD`)
+        + Tres LED de indicación de salida (`OUT_CHARGE`, `OUT_DISCHARGE`, `IMPULSE`). (`DK7`: `DE`-`DG`)
+        + Diez led para escala analógica (RGGGGYYYRR). (`DK5`: `DA`-`DDP`; `DK6`: `DA`-`DB`)
         + Un buzzer con soporte para tonos.
         + Tres pulsadores (unit, set, mode) que permite cambiar la unidad mostrada en display y modificar la configuración de control.
         + El display usa entrada de 9 pines: `DS_VCC`, `DS_MOSI`, `DS_SCK`, `DS_SS`, `DS_BUZ`, `DS_UNT`, `DS_MOD`, `DS_SET`, `DS_GND`. VCC de 5V
@@ -37,23 +40,24 @@ Reimplementación del branch `old-v1`, con funcionalidades añadidas:
         + Conexión directa al display, mediante zócalo.
         + Cabecera de ISP.
         + EEPROM SPI (bus compartido) para log.
-        + Conector de salidas de drenador abierto para media potencia. Salidas: `STAT_FULL`, `STAT_FLOAT`, `STAT_FAIL`, `OUT_CHARGE`, `OUT_DISCHARGE`.
+        + Conector de salidas de drenador abierto para media potencia. Salidas: `STAT_FULL`, `STAT_FLOAT`, `STAT_FAIL`, `OUT_CHARGE`, `OUT_DISCHARGE`, `IMPULSE`.
         + Conector de comunicaciones mediante RS485 con pull y terminador. Válido para programación.
         + Conector de sonda mediante RS485 con pull y terminador. Incorpora alimentación regulada.
         + Permite múltiples sondas en cascada.
-        + Autodetección de la sonda
-        + Alimentación de módulo a 12-36vdc
+        + Autodetección de la sonda.
+        + Selección de alimentación a través de módulo o desde sonda.
         + Monitorización de tensiones en entrada y VCC
     * Sonda
         + Módulos en rangos de tensión y corriente admitida.
         + Basado en ATmega 328 a 16MHz
-        + Conexión RS485 con el módulo principal.
+        + Conexión RS485 con el módulo principal. Válido para programación.
         + Selector de terminador.
         + Conector de sonda para sondas en cascada.
         + Medida de tensión.
         + Medida de corriente.
         + Conector para sonda de temperatura.
-        + Sensor de temperatura incorporado en el cuerpo de la sonda.
+        + Sensor de temperatura incorporado en el cuerpo de la sonda para medida diferencial.
+        + Preamplificadores operacionales anteriores al ADC.
 
 Usos:
 - Logger
@@ -63,6 +67,7 @@ Usos:
 - Voltmeter
 - Ammeter
 - Capacity meter
+- Energy meter
 
 Librerias:
 - datelib

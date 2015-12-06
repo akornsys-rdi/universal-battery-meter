@@ -1,4 +1,4 @@
-update=vie 26 dic 2014 15:29:16 CET
+update=sáb 07 mar 2015 19:26:35 CET
 version=1
 last_client=kicad
 [cvpcb]
@@ -63,3 +63,16 @@ LibName29=contrib
 LibName30=valves
 LibName31=25LC1024
 LibName32=MAX13487
+[schematic_editor]
+version=1
+PageLayoutDescrFile=
+PlotDirectoryName=/home/kwendenarmo/git-repos/akornsys-rdi/universal-battery-meter/brd/control/
+SubpartIdSeparator=0
+SubpartFirstId=65
+NetFmtName=
+SpiceForceRefPrefix=0
+SpiceUseNetNumbers=0
+RptD_X=0
+RptD_Y=100
+RptLab=1
+LabSize=60
